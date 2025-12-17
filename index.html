@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>グラフ描画アプリケーション</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Chart.js Datalabels Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
+    <!-- Canvg (for editable SVG export) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvg@4.0.2/lib/umd.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-100">
+    <div x-data="chartApp()" class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">グラフ描画アプリケーション</h1>
+
+        <div class="flex flex-col gap-6">
+            <!-- 上部: 表計算UI -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">データ入力</h2>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- 左側: データ入力 -->
+                    <div class="lg:col-span-2">
+                        <!-- グラフ名 -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">グラフ名（省略可）</label>
+                            <input
+                                type="text"
+                                x-model="customTitle"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="未入力の場合はグラフの種類が表示されます"
+                            >
+                        </div>
+
+                        <!-- グラフタイプ選択 -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">グラフの種類</label>
+                            <select x-model="chartType" @change="updateChart()" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="pie">円グラフ</option>
+                                <option value="doughnut">ドーナツグラフ</option>
+                                <option value="bar">棒グラフ</option>
+                                <option value="line">折れ線グラフ</option>
+                                <option value="horizontalBar">横棒グラフ</option>
+                            </select>
+                        </div>
+
+                        <!-- 色セット選択 -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">色セット</label>
+                            <div class="flex gap-2">
+                                <select x-model="selectedColorSet" class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">選択してください</option>
+                                    <option value="blue">青系</option>
+                                    <option value="red">赤系</option>
+                                    <option value="green">緑系</option>
+                                    <option value="yellow">黄色系</option>
+                                    <option value="purple">紫系</option>
+                                    <option value="orange">オレンジ系</option>
+                                    <option value="pink">ピンク系</option>
+                                    <option value="teal">ティール系</option>
+                                </select>
+                                <button
+                                    @click="applyColorSet()"
+                                    :disabled="!selectedColorSet"
+                                    class="min-w-[80px] w-auto px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+                                >
+                                    適用
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- データテーブル -->
+                        <div class="overflow-x-auto">
+                            <table id="dataTable" class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="border border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-700 w-12">
+                                            <span class="sr-only">並び替え</span>
+                                        </th>
+                                        <th class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">ラベル</th>
+                                        <th class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">値</th>
+                                        <th class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">色</th>
+                                        <th class="border border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="(row, index) in dataRows" :key="row.id">
+                                        <tr
+                                            class="hover:bg-gray-50"
+                                            @dragover.prevent.stop="handleDragOver($event, index)"
+                                            @drop.prevent.stop="handleDrop($event, index)"
+                                            :class="{
+                                                'sortable-ghost': draggedIndex === index,
+                                                'sortable-drop-indicator': dragOverIndex === index && draggedIndex !== index
+                                            }"
+                                        >
+                                            <td class="border border-gray-300 px-2 py-1 text-center handle">
+                                                <div
+                                                    class="drag-handle cursor-grab inline-block"
+                                                    title="ドラッグして移動"
+                                                    draggable="true"
+                                                    @dragstart="handleDragStart($event, index)"
+                                                    @dragend="handleDragEnd($event)"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
+                                                    </svg>
+                                                </div>
+                                            </td>
+                                            <td class="border border-gray-300 px-2 py-1">
+                                                <input
+                                                    type="text"
+                                                    x-model="row.label"
+                                                    class="w-full px-2 py-1 border-0 focus:ring-2 focus:ring-blue-500 rounded"
+                                                    placeholder="ラベル"
+                                                >
+                                            </td>
+                                            <td class="border border-gray-300 px-2 py-1">
+                                                <input
+                                                    type="number"
+                                                    x-model.number="row.value"
+                                                    class="w-full px-2 py-1 border-0 focus:ring-2 focus:ring-blue-500 rounded"
+                                                    placeholder="値"
+                                                    min="0"
+                                                >
+                                            </td>
+                                            <td class="border border-gray-300 px-2 py-1">
+                                                <div class="flex items-center gap-2">
+                                                    <input
+                                                        type="color"
+                                                        x-model="row.color"
+                                                        class="w-10 h-8 border border-gray-300 rounded cursor-pointer"
+                                                    >
+                                                    <input
+                                                        type="text"
+                                                        x-model="row.color"
+                                                        class="flex-1 px-2 py-1 border border-gray-300 focus:ring-2 focus:ring-blue-500 rounded text-sm"
+                                                        placeholder="#000000"
+                                                        pattern="^#[0-9A-Fa-f]{6}$"
+                                                    >
+                                                </div>
+                                            </td>
+                                            <td class="border border-gray-300 px-2 py-1 text-center">
+                                                <button
+                                                    @click="removeRow(index)"
+                                                    class="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                                                >
+                                                    削除
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 行追加ボタン -->
+                        <button
+                            @click="addRow()"
+                            :disabled="dataRows.length >= 10"
+                            class="mt-4 min-w-[150px] w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                            行を追加 (<span x-text="dataRows.length"></span>/10)
+                        </button>
+
+                        <!-- グラフ更新ボタン -->
+                        <button
+                            @click="updateChart()"
+                            class="mt-2 min-w-[150px] w-auto px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
+                        >
+                            グラフを更新
+                        </button>
+                    </div>
+
+                    <!-- 右側: グラフの保存・読み込み -->
+                    <div class="lg:col-span-1">
+                        <!-- グラフサイズ設定 -->
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 mb-4">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-700">グラフサイズ</h3>
+
+                            <!-- 幅の設定 -->
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">幅（px）</label>
+                                <input
+                                    type="number"
+                                    x-model.number="chartWidth"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="800"
+                                    min="300"
+                                    max="2000"
+                                >
+                            </div>
+
+                            <!-- 高さの設定 -->
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">高さ（px）</label>
+                                <input
+                                    type="number"
+                                    x-model.number="chartHeight"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="600"
+                                    min="300"
+                                    max="2000"
+                                >
+                            </div>
+
+                            <!-- サイズ適用ボタン -->
+                            <button
+                                @click="updateChart()"
+                                class="w-full min-w-[150px] px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600"
+                            >
+                                サイズを適用
+                            </button>
+                        </div>
+
+                        <!-- グラフの保存・読み込み -->
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-700">グラフの保存・読み込み</h3>
+
+                            <!-- JSONエクスポートボタン -->
+                            <button
+                                @click="exportJSON()"
+                                class="min-w-[150px] w-auto px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mb-2"
+                            >
+                                JSONで保存
+                            </button>
+
+                            <!-- JSONインポートボタン -->
+                            <div class="relative">
+                                <input
+                                    type="file"
+                                    accept=".json"
+                                    @change="importJSON($event)"
+                                    id="jsonFileInput"
+                                    class="hidden"
+                                >
+                                <label
+                                    for="jsonFileInput"
+                                    class="inline-block min-w-[150px] w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-center cursor-pointer"
+                                >
+                                    JSONから読み込み
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下部: グラフ表示エリア -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-700">グラフ</h2>
+                    <button
+                        @click="exportSVG()"
+                        class="min-w-[150px] w-auto px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                    >
+                        SVGをダウンロード
+                    </button>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="myChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom JavaScript -->
+    <script src="app.js?13"></script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+/* スクリーンリーダー専用テキスト */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* グラフコンテナのレスポンシブ対応 */
+.chart-container {
+    position: relative;
+    width: 100%;
+    max-height: 500px;
+    margin: 0 auto;
+}
+
+/* テーブルのスクロール対応 */
+.overflow-x-auto {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* 入力フィールドのスタイル調整 */
+input[type="text"],
+input[type="number"],
+input[type="color"] {
+    transition: all 0.2s ease;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+    outline: none;
+}
+
+/* カラーピッカーの見た目調整 */
+input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: transparent;
+    cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+}
+
+input[type="color"]::-moz-color-swatch {
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+}
+
+/* ボタンのホバーエフェクト */
+button {
+    transition: all 0.2s ease;
+}
+
+/* テーブルのスタイル調整 */
+table {
+    font-size: 0.875rem;
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 1024px) {
+    .chart-container {
+        max-height: 400px;
+    }
+}
+
+@media (max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-container {
+        max-height: 300px;
+    }
+
+    table {
+        font-size: 0.75rem;
+    }
+}
+
+/* スクロールバーのスタイル（Webkit系ブラウザ） */
+.overflow-x-auto::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* ドラッグハンドルのスタイル */
+.drag-handle {
+    cursor: grab;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.drag-handle:hover {
+    background-color: #e5e7eb;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+    background-color: #d1d5db;
+}
+
+.drag-handle svg {
+    pointer-events: none;
+}
+
+/* SortableJS風のスタイル */
+
+/* 行の基本スタイル */
+tbody tr {
+    position: relative;
+}
+
+/* ドラッグ中の行（ゴースト） */
+tbody tr.sortable-ghost {
+    opacity: 0.5;
+    background-color: #f3f4f6 !important;
+    cursor: grabbing !important;
+    pointer-events: none;
+}
+
+tbody tr.sortable-ghost * {
+    cursor: grabbing !important;
+    pointer-events: none;
+}
+
+/* ドロップ先のインジケーター */
+tbody tr.sortable-drop-indicator {
+    position: relative;
+}
+
+tbody tr.sortable-drop-indicator::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background-color: #3b82f6;
+    z-index: 10;
+    border-radius: 2px;
+}
+
+/* ドラッグハンドル */
+.drag-handle {
+    cursor: grab;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.drag-handle:hover {
+    background-color: #e5e7eb;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+    background-color: #d1d5db;
+}
+
+.drag-handle svg {
+    pointer-events: none;
+    transition: transform 0.15s ease;
+}
+
+.drag-handle:hover svg {
+    transform: scale(1.1);
+}
+
+/* ドラッグ可能な行のホバー効果 */
+tbody tr:not(.sortable-ghost):hover .drag-handle svg {
+    color: #6b7280;
+}
