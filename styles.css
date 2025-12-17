@@ -207,3 +207,12 @@ tbody tr.sortable-drop-indicator::before {
 tbody tr:not(.sortable-ghost):hover .drag-handle svg {
     color: #6b7280;
 }
+
+/* データセット選択UI用の追加スタイル */
+.dataset-tab-active {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dataset-tab-inactive {
+    opacity: 0.8;
+}

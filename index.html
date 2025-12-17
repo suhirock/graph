@@ -49,13 +49,78 @@
                         <!-- グラフタイプ選択 -->
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">グラフの種類</label>
-                            <select x-model="chartType" @change="updateChart()" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <select x-model="chartType" @change="handleChartTypeChange()" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <option value="pie">円グラフ</option>
                                 <option value="doughnut">ドーナツグラフ</option>
                                 <option value="bar">棒グラフ</option>
+                                <option value="groupedBar">複数比較の棒グラフ</option>
                                 <option value="line">折れ線グラフ</option>
                                 <option value="horizontalBar">横棒グラフ</option>
                             </select>
+                        </div>
+
+                        <!-- データセット選択 (複数比較の棒グラフのみ表示) -->
+                        <div x-show="chartType === 'groupedBar'" class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">データセット管理</label>
+
+                            <div class="flex gap-2 mb-3 flex-wrap">
+                                <!-- データセットタブ -->
+                                <template x-for="(dataset, index) in datasets" :key="dataset.id">
+                                    <button
+                                        @click="currentDatasetIndex = index; updateChart()"
+                                        :class="{
+                                            'bg-blue-500 text-white': currentDatasetIndex === index,
+                                            'bg-gray-200 text-gray-700 hover:bg-gray-300': currentDatasetIndex !== index
+                                        }"
+                                        class="px-3 py-2 rounded transition-colors text-sm font-medium"
+                                        x-text="dataset.label"
+                                    ></button>
+                                </template>
+                            </div>
+
+                            <div class="flex gap-2 mb-2">
+                                <!-- データセット名編集 -->
+                                <input
+                                    type="text"
+                                    x-model="datasets[currentDatasetIndex].label"
+                                    @change="updateChart()"
+                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="データセット名"
+                                >
+
+                                <!-- データセットカラー選択 -->
+                                <input
+                                    type="color"
+                                    x-model="datasets[currentDatasetIndex].color"
+                                    @change="updateChart()"
+                                    class="w-16 h-10 px-1 py-1 border border-gray-300 rounded-md cursor-pointer"
+                                    title="データセットの色"
+                                >
+
+                                <!-- データセット追加ボタン -->
+                                <button
+                                    @click="addDataset()"
+                                    :disabled="datasets.length >= 5"
+                                    class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+                                >
+                                    + 追加
+                                </button>
+
+                                <!-- データセット削除ボタン -->
+                                <button
+                                    @click="removeDataset(currentDatasetIndex)"
+                                    :disabled="datasets.length <= 1"
+                                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+                                >
+                                    削除
+                                </button>
+                            </div>
+
+                            <!-- 現在のデータセット表示 -->
+                            <div class="text-sm text-gray-600">
+                                編集中: <span class="font-semibold" x-text="datasets[currentDatasetIndex].label"></span>
+                                (<span x-text="datasets[currentDatasetIndex].dataRows.length"></span> 行)
+                            </div>
                         </div>
 
                         <!-- 色セット選択 -->
@@ -93,12 +158,12 @@
                                         </th>
                                         <th class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">ラベル</th>
                                         <th class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">値</th>
-                                        <th class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700">色</th>
+                                        <th class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700" x-show="chartType !== 'groupedBar'">色</th>
                                         <th class="border border-gray-300 px-3 py-2 text-center text-sm font-medium text-gray-700">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="(row, index) in dataRows" :key="row.id">
+                                    <template x-for="(row, index) in getCurrentDataset().dataRows" :key="row.id">
                                         <tr
                                             class="hover:bg-gray-50"
                                             @dragover.prevent.stop="handleDragOver($event, index)"
@@ -138,7 +203,7 @@
                                                     min="0"
                                                 >
                                             </td>
-                                            <td class="border border-gray-300 px-2 py-1">
+                                            <td class="border border-gray-300 px-2 py-1" x-show="chartType !== 'groupedBar'">
                                                 <div class="flex items-center gap-2">
                                                     <input
                                                         type="color"

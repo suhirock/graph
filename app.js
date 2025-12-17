@@ -54,6 +54,12 @@ function chartApp() {
         dragOverIndex: null,
         dragOverThrottle: null,
 
+        // 複数比較の棒グラフ用の状態
+        datasets: null,
+        currentDatasetIndex: 0,
+        nextDatasetId: 2,
+        previousChartType: null,
+
         // 色セット定義
         colorSets: {
             blue: { name: '青系', base: { r: 33, g: 150, b: 243 } },
@@ -67,6 +73,18 @@ function chartApp() {
         },
 
         init() {
+            // 従来のdataRowsをdatasets構造に移行
+            if (!this.datasets) {
+                this.datasets = [{
+                    id: 1,
+                    label: 'データセット1',
+                    dataRows: this.dataRows,
+                    nextRowId: this.nextId
+                }];
+                this.currentDatasetIndex = 0;
+                this.nextDatasetId = 2;
+            }
+
             // ページ読み込み時にグラフを初期化
             this.$nextTick(() => {
                 this.createChart();
@@ -149,22 +167,190 @@ function chartApp() {
             console.log('[DRAG END]');
         },
 
-        addRow() {
-            if (this.dataRows.length < 10) {
-                // ランダムな色を生成
-                const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+        // 現在のデータセットを取得
+        getCurrentDataset() {
+            if (this.chartType === 'groupedBar' && this.datasets) {
+                return this.datasets[this.currentDatasetIndex];
+            }
+            // 従来のグラフタイプの場合は互換性のために従来の構造を返す
+            return {
+                dataRows: this.dataRows,
+                label: 'データ'
+            };
+        },
 
-                this.dataRows.push({
-                    id: this.nextId++,
-                    label: '',
-                    value: 0,
-                    color: randomColor
+        // グラフタイプ変更ハンドラ
+        handleChartTypeChange() {
+            const oldType = this.previousChartType || this.chartType;
+
+            // groupedBarへの切り替え
+            if (this.chartType === 'groupedBar' && oldType !== 'groupedBar') {
+                // datasetsが未初期化の場合は初期化
+                if (!this.datasets) {
+                    this.datasets = [{
+                        id: 1,
+                        label: 'データセット1',
+                        color: '#2196F3',  // 青
+                        dataRows: this.dataRows.map(row => ({
+                            id: row.id,
+                            label: row.label,
+                            value: row.value
+                        })),
+                        nextRowId: this.nextId
+                    }];
+                    this.currentDatasetIndex = 0;
+                    this.nextDatasetId = 2;
+                }
+
+                // 既存データセットにcolor属性がない場合は追加
+                this.datasets.forEach((dataset, index) => {
+                    if (!dataset.color) {
+                        const colorSetKeys = Object.keys(this.colorSets);
+                        const colorSetKey = colorSetKeys[index % colorSetKeys.length];
+                        const colorSet = this.colorSets[colorSetKey];
+                        dataset.color = this.rgbToHex(colorSet.base.r, colorSet.base.g, colorSet.base.b);
+                    }
+                    // dataRowsからcolorを削除
+                    if (dataset.dataRows) {
+                        dataset.dataRows = dataset.dataRows.map(row => ({
+                            id: row.id,
+                            label: row.label,
+                            value: row.value
+                        }));
+                    }
                 });
+
+                // データセットが1つしかない場合は2つ目を自動作成
+                if (this.datasets.length === 1) {
+                    const firstDataset = this.datasets[0];
+                    this.datasets.push({
+                        id: this.nextDatasetId++,
+                        label: 'データセット2',
+                        color: '#F44336',  // 赤
+                        dataRows: firstDataset.dataRows.map(row => ({
+                            id: row.id,
+                            label: row.label,
+                            value: 0
+                        })),
+                        nextRowId: firstDataset.nextRowId
+                    });
+                }
+            }
+
+            // groupedBarからの切り替え
+            if (oldType === 'groupedBar' && this.chartType !== 'groupedBar') {
+                // 複数データセットにデータがあるか確認
+                const hasMultipleDatasets = this.datasets && this.datasets.length > 1;
+                const hasDataInOtherDatasets = hasMultipleDatasets && this.datasets.slice(1).some(ds =>
+                    ds.dataRows.some(row => row.value > 0)
+                );
+
+                if (hasMultipleDatasets && hasDataInOtherDatasets) {
+                    const confirmed = confirm(
+                        '複数のデータセットがあります。最初のデータセットのみが保持されます。よろしいですか?'
+                    );
+                    if (!confirmed) {
+                        this.chartType = oldType;
+                        return;
+                    }
+                }
+
+                // 最初のデータセットを従来のdataRowsに戻す
+                if (this.datasets && this.datasets.length > 0) {
+                    this.dataRows = this.datasets[0].dataRows;
+                    this.nextId = this.datasets[0].nextRowId;
+                }
+            }
+
+            this.previousChartType = this.chartType;
+            this.updateChart();
+        },
+
+        // データセット追加
+        addDataset() {
+            if (!this.datasets || this.datasets.length >= 5) return;
+
+            const referenceDataset = this.datasets[0];
+            const datasetIndex = this.datasets.length;
+
+            // 次のカラーセットを選択
+            const colorSetKeys = Object.keys(this.colorSets);
+            const colorSetKey = colorSetKeys[datasetIndex % colorSetKeys.length];
+            const colorSet = this.colorSets[colorSetKey];
+
+            // データセット用の単色を生成
+            const datasetColor = this.rgbToHex(colorSet.base.r, colorSet.base.g, colorSet.base.b);
+
+            const newDataset = {
+                id: this.nextDatasetId++,
+                label: `データセット${this.datasets.length + 1}`,
+                color: datasetColor,  // データセット全体の色
+                dataRows: referenceDataset.dataRows.map(row => ({
+                    id: row.id,
+                    label: row.label,
+                    value: 0
+                })),
+                nextRowId: referenceDataset.nextRowId
+            };
+
+            this.datasets.push(newDataset);
+            this.currentDatasetIndex = this.datasets.length - 1;
+            this.updateChart();
+        },
+
+        // データセット削除
+        removeDataset(index) {
+            if (!this.datasets || this.datasets.length <= 1) return;
+
+            this.datasets.splice(index, 1);
+
+            // currentDatasetIndexを調整
+            if (this.currentDatasetIndex >= this.datasets.length) {
+                this.currentDatasetIndex = this.datasets.length - 1;
+            }
+
+            this.updateChart();
+        },
+
+        addRow() {
+            if (this.chartType === 'groupedBar' && this.datasets) {
+                // 複数比較の棒グラフの場合は全データセットに行を追加
+                const firstDataset = this.datasets[0];
+                if (firstDataset.dataRows.length >= 10) return;
+
+                this.datasets.forEach(dataset => {
+                    dataset.dataRows.push({
+                        id: dataset.nextRowId,
+                        label: '',
+                        value: 0
+                    });
+                    dataset.nextRowId++;
+                });
+            } else {
+                // 従来のグラフタイプの場合
+                if (this.dataRows.length < 10) {
+                    const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+
+                    this.dataRows.push({
+                        id: this.nextId++,
+                        label: '',
+                        value: 0,
+                        color: randomColor
+                    });
+                }
             }
         },
 
         removeRow(index) {
-            this.dataRows.splice(index, 1);
+            if (this.chartType === 'groupedBar' && this.datasets) {
+                // 複数比較の棒グラフの場合は全データセットから行を削除
+                this.datasets.forEach(dataset => {
+                    dataset.dataRows.splice(index, 1);
+                });
+            } else {
+                // 従来のグラフタイプの場合
+                this.dataRows.splice(index, 1);
+            }
         },
 
         applyColorSet() {
@@ -173,14 +359,27 @@ function chartApp() {
             }
 
             const colorSet = this.colorSets[this.selectedColorSet];
-            const colors = this.generateColorShades(colorSet.base, this.dataRows.length);
 
-            // 各行に色を適用
-            this.dataRows.forEach((row, index) => {
-                if (colors[index]) {
-                    row.color = colors[index];
-                }
-            });
+            if (this.chartType === 'groupedBar' && this.datasets) {
+                // 複数比較の棒グラフの場合は現在のデータセットに色を適用
+                const currentDataset = this.datasets[this.currentDatasetIndex];
+                const colors = this.generateColorShades(colorSet.base, currentDataset.dataRows.length);
+
+                currentDataset.dataRows.forEach((row, index) => {
+                    if (colors[index]) {
+                        row.color = colors[index];
+                    }
+                });
+            } else {
+                // 従来のグラフタイプの場合
+                const colors = this.generateColorShades(colorSet.base, this.dataRows.length);
+
+                this.dataRows.forEach((row, index) => {
+                    if (colors[index]) {
+                        row.color = colors[index];
+                    }
+                });
+            }
         },
 
         generateColorShades(baseColor, count) {
@@ -247,6 +446,11 @@ function chartApp() {
         },
 
         getChartConfig() {
+            // 複数比較の棒グラフの場合は専用の設定を使用
+            if (this.chartType === 'groupedBar') {
+                return this.getGroupedBarChartConfig();
+            }
+
             const labels = this.dataRows.map(row => row.label || '未設定');
             const data = this.dataRows.map(row => row.value || 0);
             const colors = this.dataRows.map(row => row.color || '#CCCCCC');
@@ -438,6 +642,98 @@ function chartApp() {
             return baseConfig;
         },
 
+        getGroupedBarChartConfig() {
+            // 複数比較の棒グラフ用の設定
+            if (!this.datasets || this.datasets.length === 0) {
+                return null;
+            }
+
+            // 最初のデータセットからラベルを取得（全データセットで共通）
+            const labels = this.datasets[0].dataRows.map(row => row.label || '未設定');
+
+            // 各データセット用のChart.js datasets配列を構築
+            const chartDatasets = this.datasets.map(dataset => {
+                const data = dataset.dataRows.map(row => row.value || 0);
+                const datasetColor = dataset.color || '#CCCCCC';
+
+                return {
+                    label: dataset.label,
+                    data: data,
+                    backgroundColor: datasetColor,
+                    borderColor: this.darkenColor(datasetColor),
+                    borderWidth: 1
+                };
+            });
+
+            // Y軸の最大値を計算
+            const maxValue = Math.max(
+                ...chartDatasets.flatMap(ds => ds.data),
+                1
+            );
+            const yAxisMax = Math.ceil(maxValue * 1.2);
+
+            return {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: chartDatasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    layout: {
+                        padding: {
+                            top: 40
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: this.getChartTitle(),
+                            padding: {
+                                bottom: 30
+                            }
+                        },
+                        datalabels: {
+                            display: true,
+                            color: '#000',
+                            font: {
+                                weight: 'bold',
+                                size: 11
+                            },
+                            formatter: (value) => {
+                                return `${value}件`;
+                            },
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 4
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                autoSkip: false,
+                                maxRotation: 0,
+                                minRotation: 0
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: yAxisMax,
+                            title: {
+                                display: true,
+                                text: '値'
+                            }
+                        }
+                    }
+                }
+            };
+        },
+
         getChartTitle() {
             // カスタムタイトルがあればそれを使用、なければデフォルトのグラフタイプ名
             if (this.customTitle && this.customTitle.trim() !== '') {
@@ -448,6 +744,7 @@ function chartApp() {
                 'pie': '円グラフ',
                 'doughnut': 'ドーナツグラフ',
                 'bar': '棒グラフ',
+                'groupedBar': '複数比較の棒グラフ',
                 'line': '折れ線グラフ',
                 'horizontalBar': '横棒グラフ'
             };
@@ -486,6 +783,9 @@ function chartApp() {
                 } else if (this.chartType === 'horizontalBar') {
                     // 横棒グラフの場合も真のベクターSVGを生成
                     svgContent = this.generateHorizontalBarChartSVG(canvas.width, canvas.height);
+                } else if (this.chartType === 'groupedBar') {
+                    // 複数比較の棒グラフの場合も真のベクターSVGを生成
+                    svgContent = this.generateGroupedBarChartSVG(canvas.width, canvas.height);
                 } else {
                     // 他のグラフタイプはCanvasをSVGに埋め込む
                     const imageData = canvas.toDataURL('image/png');
@@ -826,6 +1126,151 @@ function chartApp() {
             return svg;
         },
 
+        generateGroupedBarChartSVG(width, height) {
+            // 複数比較の棒グラフ用の真のベクターSVGを生成
+            if (!this.datasets || this.datasets.length === 0) {
+                return '';
+            }
+
+            // データ抽出
+            const labels = this.datasets[0].dataRows.map(row => row.label || '未設定');
+            const allData = this.datasets.map(dataset => ({
+                label: dataset.label,
+                values: dataset.dataRows.map(row => row.value || 0),
+                color: dataset.color || '#CCCCCC'
+            }));
+
+            const maxValue = Math.max(
+                ...allData.flatMap(d => d.values),
+                1
+            ) * 1.2;
+
+            // レイアウト計算
+            const titleY = 35;
+            const margin = { top: 100, right: 200, bottom: 80, left: 60 };
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+
+            const categoryCount = labels.length;
+            const datasetCount = this.datasets.length;
+
+            // 棒のグルーピング計算
+            const categorySpacing = chartWidth / categoryCount;
+            const groupWidth = categorySpacing * 0.8;
+            const barWidth = groupWidth / datasetCount;
+            const barGap = barWidth * 0.1;
+            const effectiveBarWidth = barWidth - barGap;
+
+            let svg = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"
+     xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .bar { stroke: #fff; stroke-width: 1; }
+      .bar-label { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; fill: #333; text-anchor: middle; }
+      .axis-label { font-family: Arial, sans-serif; font-size: 11px; fill: #666; text-anchor: middle; }
+      .axis-line { stroke: #ccc; stroke-width: 1; }
+      .grid-line { stroke: #e0e0e0; stroke-width: 1; }
+      .title-text { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; fill: #333; text-anchor: middle; }
+      .axis-title { font-family: Arial, sans-serif; font-size: 12px; fill: #666; }
+      .legend-item { font-family: Arial, sans-serif; font-size: 12px; fill: #333; }
+    </style>
+  </defs>
+
+  <!-- タイトル -->
+  <text x="${width / 2}" y="${titleY}" class="title-text">${this.getChartTitle()}</text>
+
+  <!-- 背景グリッド線 -->
+  <g id="grid">
+`;
+
+            // Y軸グリッド線
+            for (let i = 0; i <= 5; i++) {
+                const y = margin.top + (chartHeight * i / 5);
+                svg += `    <line x1="${margin.left}" y1="${y}" x2="${margin.left + chartWidth}" y2="${y}" class="grid-line"/>\n`;
+            }
+
+            svg += `  </g>
+
+  <!-- グループ化された棒グラフ -->
+  <g id="grouped-bars">
+`;
+
+            // 各カテゴリごとにグループ化された棒を描画
+            labels.forEach((label, categoryIndex) => {
+                const categoryX = margin.left + (categorySpacing * categoryIndex);
+                const groupStartX = categoryX + (categorySpacing - groupWidth) / 2;
+
+                allData.forEach((dataset, datasetIndex) => {
+                    const value = dataset.values[categoryIndex];
+                    const color = dataset.color;
+
+                    const barHeight = (value / maxValue) * chartHeight;
+                    const barX = groupStartX + (datasetIndex * barWidth);
+                    const barY = margin.top + chartHeight - barHeight;
+
+                    svg += `    <rect x="${barX}" y="${barY}" width="${effectiveBarWidth}" height="${barHeight}" fill="${color}" class="bar" data-label="${label}" data-dataset="${dataset.label}" data-value="${value}"/>\n`;
+
+                    // 棒の上にデータラベル
+                    if (barHeight > 15) {
+                        svg += `    <text x="${barX + effectiveBarWidth / 2}" y="${barY - 5}" class="bar-label">${value}件</text>\n`;
+                    }
+                });
+            });
+
+            svg += `  </g>
+
+  <!-- X軸 -->
+  <g id="x-axis">
+    <line x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${margin.left + chartWidth}" y2="${margin.top + chartHeight}" class="axis-line"/>
+`;
+
+            // X軸ラベル（カテゴリ名）
+            labels.forEach((label, index) => {
+                const x = margin.left + (categorySpacing * index) + categorySpacing / 2;
+                svg += `    <text x="${x}" y="${margin.top + chartHeight + 20}" class="axis-label">${label}</text>\n`;
+            });
+
+            svg += `  </g>
+
+  <!-- Y軸 -->
+  <g id="y-axis">
+    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}" class="axis-line"/>
+`;
+
+            // Y軸ラベル（値）
+            for (let i = 0; i <= 5; i++) {
+                const value = Math.round(maxValue * (5 - i) / 5);
+                const y = margin.top + (chartHeight * i / 5);
+                svg += `    <text x="${margin.left - 10}" y="${y + 4}" class="axis-label" text-anchor="end">${value}</text>\n`;
+            }
+
+            svg += `    <text x="${margin.left - 40}" y="${margin.top + chartHeight / 2}" class="axis-title" text-anchor="middle" transform="rotate(-90, ${margin.left - 40}, ${margin.top + chartHeight / 2})">値</text>
+  </g>
+
+  <!-- レジェンド（右側） -->
+  <g id="legend">
+`;
+
+            // データセットごとのレジェンド
+            const legendX = margin.left + chartWidth + 20;
+            const legendStartY = margin.top + 20;
+
+            allData.forEach((dataset, index) => {
+                const legendY = legendStartY + (index * 30);
+                const datasetColor = dataset.color;
+
+                svg += `    <rect x="${legendX}" y="${legendY}" width="15" height="15" fill="${datasetColor}"/>
+    <text x="${legendX + 20}" y="${legendY + 12}" class="legend-item">${dataset.label}</text>
+`;
+            });
+
+            svg += `  </g>
+</svg>`;
+
+            return svg;
+        },
+
         generateDoughnutChartSVG(width, height) {
             // ドーナツグラフ用の真のベクターSVGを生成
             const centerX = width / 2;
@@ -931,12 +1376,14 @@ function chartApp() {
         exportJSON() {
             // グラフの状態をJSONとしてエクスポート
             const graphState = {
-                version: '1.0',
+                version: '2.0',
                 chartType: this.chartType,
                 customTitle: this.customTitle,
                 chartWidth: this.chartWidth,
                 chartHeight: this.chartHeight,
-                dataRows: this.dataRows
+                dataRows: this.dataRows,  // 後方互換性のため保持
+                datasets: this.datasets,   // 新規フィールド
+                currentDatasetIndex: this.currentDatasetIndex
             };
 
             const jsonString = JSON.stringify(graphState, null, 2);
@@ -964,7 +1411,7 @@ function chartApp() {
                     const graphState = JSON.parse(e.target.result);
 
                     // バリデーション
-                    if (!graphState.dataRows || !Array.isArray(graphState.dataRows)) {
+                    if (!graphState.dataRows && !graphState.datasets) {
                         throw new Error('無効なJSONフォーマットです');
                     }
 
@@ -974,17 +1421,57 @@ function chartApp() {
                     this.chartWidth = graphState.chartWidth || 800;
                     this.chartHeight = graphState.chartHeight || 600;
 
-                    // dataRowsを復元（IDがない場合は追加）
-                    this.dataRows = graphState.dataRows.map((row, index) => {
-                        if (!row.id) {
-                            return { ...row, id: index + 1 };
-                        }
-                        return row;
-                    });
+                    // バージョン判定：datasetsフィールドの有無で判断
+                    if (graphState.datasets) {
+                        // v2.0形式：datasets配列を復元
+                        this.datasets = graphState.datasets;
+                        this.currentDatasetIndex = graphState.currentDatasetIndex || 0;
 
-                    // nextIdを設定
-                    const maxId = Math.max(...this.dataRows.map(r => r.id || 0), 0);
-                    this.nextId = maxId + 1;
+                        // IDが欠落している場合は追加
+                        this.datasets.forEach((dataset, dsIndex) => {
+                            if (!dataset.id) {
+                                dataset.id = dsIndex + 1;
+                            }
+                            dataset.dataRows = dataset.dataRows.map((row, rowIndex) => {
+                                if (!row.id) {
+                                    return { ...row, id: rowIndex + 1 };
+                                }
+                                return row;
+                            });
+                        });
+
+                        const maxDatasetId = Math.max(...this.datasets.map(d => d.id || 0), 0);
+                        this.nextDatasetId = maxDatasetId + 1;
+
+                        // 従来のdataRowsも最初のデータセットで更新（互換性のため）
+                        if (this.datasets.length > 0) {
+                            this.dataRows = this.datasets[0].dataRows;
+                            this.nextId = this.datasets[0].nextRowId;
+                        }
+                    } else {
+                        // v1.0形式：dataRowsを復元
+                        this.dataRows = graphState.dataRows.map((row, index) => {
+                            if (!row.id) {
+                                return { ...row, id: index + 1 };
+                            }
+                            return row;
+                        });
+
+                        const maxId = Math.max(...this.dataRows.map(r => r.id || 0), 0);
+                        this.nextId = maxId + 1;
+
+                        // groupedBarの場合はdatasets構造に移行
+                        if (this.chartType === 'groupedBar') {
+                            this.datasets = [{
+                                id: 1,
+                                label: 'データセット1',
+                                dataRows: this.dataRows,
+                                nextRowId: this.nextId
+                            }];
+                            this.currentDatasetIndex = 0;
+                            this.nextDatasetId = 2;
+                        }
+                    }
 
                     // グラフを更新
                     this.updateChart();
