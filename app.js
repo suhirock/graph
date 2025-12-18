@@ -41,8 +41,8 @@ function chartApp() {
         chartType: 'pie',
         customTitle: '',
         selectedColorSet: '',
-        chartWidth: 800,
-        chartHeight: 600,
+        chartWidth: 1200,
+        chartHeight: 800,
         dataRows: [
             { id: 1, label: 'カテゴリA', value: 30, color: '#FF6384' },
             { id: 2, label: 'カテゴリB', value: 50, color: '#36A2EB' },
@@ -816,14 +816,20 @@ function chartApp() {
 
         generatePieChartSVG(width, height) {
             // 円グラフ用の真のベクターSVGを生成
-            const centerX = width / 2;
-            const centerY = height / 2.2; // タイトルとレジェンド用にスペースを確保
-            const radius = Math.min(width, height) / 3.5;
-
             const data = this.dataRows.map(row => row.value || 0);
             const labels = this.dataRows.map(row => row.label || '未設定');
             const colors = this.dataRows.map(row => row.color || '#CCCCCC');
             const total = data.reduce((sum, value) => sum + value, 0);
+
+            // レジェンドの幅を動的に計算（おおよその幅）
+            const maxLabelLength = Math.max(...labels.map(l => l.length));
+            const legendWidth = Math.min(250, 100 + maxLabelLength * 8);
+
+            // 利用可能なエリアの中央に配置
+            const availableWidth = width - legendWidth;
+            const centerX = legendWidth + availableWidth / 2;
+            const centerY = height / 2.2; // タイトルとレジェンド用にスペースを確保
+            const radius = Math.min(availableWidth, height) / 3.5;
 
             let svg = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"
@@ -1273,15 +1279,21 @@ function chartApp() {
 
         generateDoughnutChartSVG(width, height) {
             // ドーナツグラフ用の真のベクターSVGを生成
-            const centerX = width / 2;
-            const centerY = height / 2.2; // タイトルとレジェンド用にスペースを確保
-            const outerRadius = Math.min(width, height) / 3.5;
-            const innerRadius = outerRadius * 0.5; // 内側の半径は外側の50%
-
             const data = this.dataRows.map(row => row.value || 0);
             const labels = this.dataRows.map(row => row.label || '未設定');
             const colors = this.dataRows.map(row => row.color || '#CCCCCC');
             const total = data.reduce((sum, value) => sum + value, 0);
+
+            // レジェンドの幅を動的に計算（おおよその幅）
+            const maxLabelLength = Math.max(...labels.map(l => l.length));
+            const legendWidth = Math.min(250, 100 + maxLabelLength * 8);
+
+            // 利用可能なエリアの中央に配置
+            const availableWidth = width - legendWidth;
+            const centerX = legendWidth + availableWidth / 2;
+            const centerY = height / 2.2; // タイトルとレジェンド用にスペースを確保
+            const outerRadius = Math.min(availableWidth, height) / 3.5;
+            const innerRadius = outerRadius * 0.5; // 内側の半径は外側の50%
 
             let svg = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"
